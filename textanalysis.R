@@ -141,11 +141,6 @@ select.plot = ggplot(multifit.results, aes(semcoh, exclus))+
   labs(y = "Exclusivity", x = " Coherence")
 select.plot
 
-
-# Fit topic model with covariate for topic prevalence
-
-# Fit topic model with covariate for term prevalence
-
 # Fit topic model
 topic_model <- stm(text.sparse, K = 13, verbose = FALSE, init.type = "Spectral")
 
