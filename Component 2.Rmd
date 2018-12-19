@@ -1,0 +1,53 @@
+---
+name: Rachel Zenker 
+title: "Component 2"
+output: html_notebook
+---
+**1. Describe the rationale for selecting the data and its source.**
+I've elected to use a set of transcripts (n=19) that were collected in Werner Lab. The transcripts outline the experiences of caregivers of Alzheimer's disease or dementia patients.  
+
+**2. Describe any data cleaning and merging you did.**
+The transcripts were parced out by speaker and saved in an Excel file for another project. I've since saved the Excel file as a csv file to allow r to easily read it in. The data contains three columns: interview, speaker, and transcript.  
+
+**3. Describe at least one transformation operation that you used to abstract your data to make it more meaningful.**
+I recruited tidytext's unnest_tokens to break the sentences down into individual words make subsequent analysis easier. From there, used dplyr to remove stop words to lean the data even further. I then used get_sentiment() to count the number of times words associated with "joy" appear in the data. This is an initial extraction, but I'm hoping it will inspire or lead me to gain a better understanding of what types of sentiments I can extract, and how I can provide / creat meaningful relationships via ggplot2. 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(tidyr)
+
+raw_data <-read.csv("interviews.csv", header = TRUE, stringsAsFactors=FALSE)
+
+
+tidy_data <- raw_data %>% 
+  unnest_tokens(words, Transcript)
+
+less_stop <- tidy_data %>%
+  anti_join(get_stopwords("en","snowball") , by=c("words"="word"))
+
+total_counts <- less_stop %>% count(words, sort = TRUE)
+
+nrcjoy <- get_sentiments("nrc") %>% filter(sentiment == "joy")
+
+joy_total <- tidy_data %>% semi_join(nrcjoy, by=c("words"="word")) %>% count(words, sort = TRUE)
+
+x_mod <- which.max(joy_total[,2] < 50)
+
+joy_mod <- joy_total[1:x_mod,]
+```
+
+
+**3. Include at least one visualization using ggplot2 that highlights an aspect of your data that you hope the machine learning will help you quantify.**
+I decided to only show words with cummulative values of 50 or greater, which averages out to 2 - 3 instances per transcript. This was selected arbitrarily, but I hope to come up with more meaningful delineators moving forward. 
+
+
+```{r}
+ggplot(data = joy_mod, mapping = aes(x = words, y = n)) + geom_point() + 
+  labs(title = "Most Common Joy-Associated Words Across All Interviews", y = "instances") 
+
+```
+

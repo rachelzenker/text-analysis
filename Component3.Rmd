@@ -1,0 +1,139 @@
+---
+title: "Component 3"
+output: html_notebook
+Name: Rachel Zenker
+Assignment: Componenet 3 
+---
+
+**1. Describe the general analytic approach you chose (i.e., supervised learning, unsupervised learning, and reinforcement learning) and why.**
+Based off of the text-analysis readings from a few weeks ago, I decided to switch my analysis method from semantic analysis to topic modeling, a branch of unsupervised learning. I elected to use topic modeling to analyze 20 (hour-long) transcripts of semi-strucutred interviews with informal caregivers of dementia patients to extract themes that span across the interviews, and (in part) to explore its useage as an alternative to traditional manual thematic coding. 
+
+**2. Describe the specific machine learning algorithms you chose (e.g., k-means) and why.**
+I used Latent Dirichlet Allocation (LDA) to assess this data via topic modeling. I elected to use LDA for a few reasons. First, LDA was the method we discussed in class. Second, there is quite a bit of literature and exemplary code avaliable online, which made it reasonably managable to operationalize as an individual with minimal r programming experience. Third, I think it has the potential to pull out valueable themes, that may or may not be identifiable through manual coding. 
+
+**3. Show a visualization that shows how well the algorithm works with your data.**
+
+```{r}
+#load text mining library
+library(tm)
+library(topicmodels)
+library(NLP)
+
+#set working directory
+setwd("/Users/Rachel/Documents/ISyE 859/Interviews")
+
+#load files into corpus
+#get listing of .txt files in directory
+filenames <- list.files(getwd(),pattern="*.txt")
+
+#read files into a character vector
+files <- lapply(filenames,readLines)
+
+#create corpus from vector
+docs <- Corpus(VectorSource(files))
+
+#Remove stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+
+#Remove other common or unneeded words 
+unneeded_words <- c("interviewer", "respondent", "xca", "know", "one", "oh", "yeah", "get", "gets", "going", "hmm", "\xca.\xca.\xca", "m", "\xd5", ". . . " )
+docs <- tm_map(docs, removeWords, unneeded_words)
+
+#Transform to lower case
+docs <-tm_map(docs,content_transformer(tolower))
+
+#Strip digits
+docs <- tm_map(docs, removeNumbers)
+
+#Remove punctuation
+docs <- tm_map(docs, removePunctuation)
+
+#remove whitespace
+docs <- tm_map(docs, stripWhitespace)
+
+#Stem document
+docs <- tm_map(docs,stemDocument)
+
+#Create document-term matrix and bound word length and occurrences to ensure that words are between 4 and 20 characters in length and that they occur in at least 3 documents
+
+dtmr <-DocumentTermMatrix(docs, control=list(wordLengths=c(4, 20), bounds = list(global = c(3,20))))
+
+#convert rownames to filenames
+rownames(dtmr) <- filenames
+
+#collapse matrix by summing over columns
+freqr <- colSums(as.matrix(dtmr))
+
+#length should be total number of terms
+#length(freqr)
+
+#create sort order (descending)
+ord <- order(freqr,decreasing=TRUE)
+
+#List all terms in decreasing order of freq and write to disk
+write.csv(freqr[ord],"word_freq.csv")
+
+library(topicmodels)
+
+#Set parameters for Gibbs sampling
+burnin <- 4000
+iter <- 2000
+thin <- 500
+seed <-list(2003,5,63,100001,765)
+nstart <- 5
+best <- TRUE
+
+#Number of topics
+k <- 5
+
+#Run LDA using Gibbs sampling
+ldaOut <-LDA(dtmr,k, method="Gibbs", control=list(nstart=nstart, seed = seed, best=best, burnin = burnin, iter = iter, thin=thin))
+
+#write out results
+#docs to topics
+ldaOut.topics <- as.matrix(topics(ldaOut))
+#write.csv(ldaOut.topics,file=paste("LDAGibbs",k,"DocsToTopics.csv"))
+
+#top 6 terms in each topic
+ldaOut.terms <- as.matrix(terms(ldaOut,6))
+#write.csv(ldaOut.terms,file=paste("LDAGibbs",k,"TopicsToTerms.csv"))
+
+#probabilities associated with each topic assignment
+topicProbabilities <- as.data.frame(ldaOut@gamma)
+#write.csv(topicProbabilities,file=paste("LDAGibbs",k,"TopicProbabilities.csv"))
+
+#Find relative importance of top 2 topics
+topic1ToTopic2 <- lapply(1:nrow(dtmr),function(x)
+  sort(topicProbabilities[x,])[k]/sort(topicProbabilities[x,])[k-1])
+
+#Find relative importance of second and third most important topics
+topic2ToTopic3 <- lapply(1:nrow(dtmr),function(x)
+  sort(topicProbabilities[x,])[k-1]/sort(topicProbabilities[x,])[k-2])
+
+#write.csv(topic1ToTopic2,file=paste("LDAGibbs",k,"Topic1ToTopic2.csv"))
+#write.csv(topic2ToTopic3,file=paste("LDAGibbs",k,"Topic2ToTopic3.csv"))
+
+#Frequency Graph
+#need to detach NLP
+wf=data.frame(term=names(freqr),occurrences=freqr)
+library(ggplot2)
+p <- ggplot(subset(wf, freqr>500), aes(term, occurrences))
+p <- p + geom_bar(stat="identity")
+p <- p + theme(axis.text.x=element_text(angle=90, hjust=1))
+p
+```
+
+```{r}
+#wordcloud
+library(wordcloud)
+#setting the same seed each time ensures consistent look across clouds
+set.seed(42)
+#limit words by specifying min frequency
+wordcloud(names(freqr),freqr, min.freqr=70)
+```
+
+
+
+**4. Describe the validity of the algorithm and the ways in which this validity is limited (e.g., representative sampling, link between theoretical constructs and variables)**
+Conceptually, I have a hard time wrapping my head around *"validating"* a topic model, given that it is a method that relies on the notion that each document consists of topics derived from other documents, and that each document may  propose a new topic that then goes to inform the topics considered in subsequent documents. Outside of witholding a subset of data, and rerunning the model to compare, I have found a few other validation methods online; however, given the complexity of these proposed methods I am going to need more time to determine if/which method may prove useful. 
+
